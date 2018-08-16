@@ -34,8 +34,8 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 	p := player{
 		Username: "test",
 		R:        0,
-		X:        0,
-		Y:        0,
+		X:        300,
+		Y:        300,
 	}
 
 	pstr, _ := json.Marshal(p)
