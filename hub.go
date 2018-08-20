@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 )
 
@@ -47,4 +48,22 @@ func (h *Hub) run() {
 			}
 		}
 	}
+}
+
+func (h *Hub) broadcastAllPlayer() {
+	var list []PlayerInfo
+	for client := range h.clients {
+		list = append(list, *client.info)
+	}
+	p, _ := json.Marshal(list)
+	msg := Message{
+		Type:    "allPlayers",
+		Payload: string(p),
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	h.broadcast <- b
 }

@@ -17,6 +17,13 @@ var config = {
   }
 }
 
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 var game = new Phaser.Game(config)
 
 function preload() {
@@ -26,20 +33,38 @@ function preload() {
 function create() {
   this.cursors = this.input.keyboard.createCursorKeys()
   var self = this
+  this.others = {}
 
   var handlers = {
     "newPlayer": function (payload) {
-      addPlayer(self, payload)
+      if (payload['ID'] == self.id)
+        addPlayer(self, payload)
+      else
+        addOtherPlayer(self, payload)
     },
     "allPlayers": function (payload) {
       if (payload != null)
-        payload.forEach(function(info) {
+        payload.forEach(function (info) {
           addOtherPlayer(self, info)
         })
 
       // addShip(self, payload["X"], payload["Y"])
     },
     "playerMovement": function (payload) {
+      if (payload['ID'] in self.others) {
+        target = self.others[payload['ID']]
+        target.x = payload['X']
+        target.y = payload['Y']
+        target.rotation = payload['R']
+      }
+    },
+    "exitPlayer": function (payload) {
+      if (payload['ID'] in self.others) {
+        target = self.others[payload['ID']]
+        delete self.others[payload['ID']]
+        target.destroy()
+      }
+
     }
   }
 
@@ -66,6 +91,15 @@ function create() {
       }
 
     })
+  }
+
+  socket.onopen = function (event) {
+    self.id = uuidv4()
+    self.send({
+      "Type": 'enterPlayer',
+      "Payload": JSON.stringify({ ID: self.id, X: 0, Y: 0, R: 0 })
+    });
+
   }
 }
 
@@ -111,8 +145,7 @@ function addPlayer(self, info) {
   self.ship = createPlayer(self, info)
 
   for (id in self.others) {
-    if (self.ship.id == id)
-    {
+    if (self.ship.id == id) {
       delete self.others[id]
       return
     }
@@ -120,18 +153,22 @@ function addPlayer(self, info) {
 }
 
 function addOtherPlayer(self, info) {
-  if (info['ID'] == self.ship.id)
+  if (info['ID'] == self.id || info['ID'] in self.others)
     return
 
   self.others[info['ID']] = createPlayer(self, info)
+  self.others[info['ID']].setTint(0xff0000)
   console.log(self.others)
 }
 
 function createPlayer(self, info) {
   player = self.physics.add.image(info['X'], info['Y'], 'ship').setOrigin(0.5, 0.5).setDisplaySize(53, 40)
+  player.rotation = info['R']
   player.id = info['ID']
   player.setDrag(100)
   player.setAngularDrag(100)
   player.setMaxVelocity(200)
   return player
 }
+
+

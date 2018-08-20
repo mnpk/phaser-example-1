@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -33,7 +34,7 @@ type Message struct {
 
 // PlayerInfo ...
 type PlayerInfo struct {
-	ID int
+	ID string
 	X  float32
 	Y  float32
 	R  float32
@@ -48,39 +49,17 @@ type Client struct {
 	info *PlayerInfo
 }
 
-func (c *Client) init() {
-	c.info = &PlayerInfo{
-		ID: c.id,
-		X:  300,
-		Y:  300,
-		R:  0,
-	}
-
-	p1, _ := json.Marshal(c.info)
-	c.response(&Message{
-		Type:    "newPlayer",
-		Payload: string(p1),
-	})
-
-	var list []PlayerInfo
-	for client := range c.hub.clients {
-		list = append(list, *client.info)
-	}
-	log.Println(list)
-	p2, _ := json.Marshal(list)
-	c.broadcast(&Message{
-		Type:    "allPlayers",
-		Payload: string(p2),
-	})
-}
-
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
+		p, _ := json.Marshal(c.info)
+		c.broadcast(&Message{
+			Type:    "exitPlayer",
+			Payload: string(p),
+		})
 		c.conn.Close()
 	}()
 
-	c.init()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
@@ -123,7 +102,39 @@ func (c *Client) broadcast(msg *Message) {
 
 func (c *Client) handleMessage(msg *Message) {
 	switch msg.Type {
+	case "enterPlayer":
+		info := PlayerInfo{}
+		err := json.Unmarshal([]byte(msg.Payload), &info)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		c.info = &PlayerInfo{
+			ID: info.ID,
+			X:  float32(rand.Intn(600) + 100),
+			Y:  float32(rand.Intn(400) + 100),
+			R:  0,
+		}
+		p1, _ := json.Marshal(c.info)
+		c.broadcast(&Message{
+			Type:    "newPlayer",
+			Payload: string(p1),
+		})
+
+		c.hub.broadcastAllPlayer()
+
 	case "playerMovement":
+		info := PlayerInfo{}
+		err := json.Unmarshal([]byte(msg.Payload), &info)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+		c.info.X = info.X
+		c.info.Y = info.Y
+		c.info.R = info.R
+
 		c.broadcast(msg)
 
 	default:
