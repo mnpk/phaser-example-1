@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"encoding/json"
 	"log"
 	"time"
 
@@ -25,6 +25,11 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
+type Message struct {
+	Type    string `json:"type"`
+	Payload string `json:"payload"`
+}
+
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
 	hub  *Hub
@@ -46,15 +51,23 @@ func (c *Client) readPump() {
 	})
 
 	for {
-		_, msg, err := c.conn.ReadMessage()
+		msg := Message{}
+		err := c.conn.ReadJSON(&msg)
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
 			break
 		}
-		msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
-		c.hub.broadcast <- msg
+		// msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
+		log.Printf("ReadJSON: %v", msg)
+		b, err := json.Marshal(msg)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+		c.hub.broadcast <- b
 	}
 }
 

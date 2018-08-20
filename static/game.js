@@ -26,20 +26,34 @@ function preload() {
 function create() {
   this.cursors = this.input.keyboard.createCursorKeys()
   var self = this
-  var socket = new WebSocket("ws://localhost:3000/ws")
-  socket.onmessage = function (event) {
-    msg = JSON.parse(event.data)
-    console.log(msg)
-    if (msg["type"] == "newPlayer") {
-      var playerInfo = JSON.parse(msg["payload"])
-      console.log(playerInfo)
-      addShip(self, playerInfo.x, playerInfo.y)
+
+  var handlers = {
+    "newPlayer": function (payload) {
+      addShip(self, payload["x"], payload["y"])
     }
   }
+
+  var socket = new WebSocket("ws://localhost:3000/ws")
+
+  socket.onmessage = function (event) {
+    msg = JSON.parse(event.data)
+    var type = msg["type"]
+    var payload = JSON.parse(msg["payload"])
+    var handler = handlers[type]
+    if (handler) {
+      console.log("handle message: ", type, payload)
+      handler(payload)
+    } else {
+      console.log("invalid message: ", type, payload)
+    }
+  }
+
+
+
   socket.onopen = function (event) {
     var msg = {
-      type: "message",
-      payload: "hello, world!",
+      type: "newPlayer",
+      payload: JSON.stringify({ "x": 300, "y": 300 })
     }
     socket.send(JSON.stringify(msg))
   }
