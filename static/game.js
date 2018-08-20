@@ -29,33 +29,43 @@ function create() {
 
   var handlers = {
     "newPlayer": function (payload) {
-      addShip(self, payload["x"], payload["y"])
+      addPlayer(self, payload)
+    },
+    "allPlayers": function (payload) {
+      if (payload != null)
+        payload.forEach(function(info) {
+          addOtherPlayer(self, info)
+        })
+
+      // addShip(self, payload["X"], payload["Y"])
+    },
+    "playerMovement": function (payload) {
     }
   }
 
   var socket = new WebSocket("ws://localhost:3000/ws")
 
-  socket.onmessage = function (event) {
-    msg = JSON.parse(event.data)
-    var type = msg["type"]
-    var payload = JSON.parse(msg["payload"])
-    var handler = handlers[type]
-    if (handler) {
-      console.log("handle message: ", type, payload)
-      handler(payload)
-    } else {
-      console.log("invalid message: ", type, payload)
-    }
-  }
-
-
-
-  socket.onopen = function (event) {
-    var msg = {
-      type: "newPlayer",
-      payload: JSON.stringify({ "x": 300, "y": 300 })
-    }
+  function send(msg) {
     socket.send(JSON.stringify(msg))
+  }
+  this.socket = socket
+  this.send = send
+
+
+  socket.onmessage = function (event) {
+    event.data.split("\n").forEach(function (data) {
+      msg = JSON.parse(data)
+      var type = msg["Type"]
+      var payload = JSON.parse(msg["Payload"])
+      var handler = handlers[type]
+      if (handler) {
+        console.log("handle message: ", type, payload)
+        handler(payload)
+      } else {
+        console.log("invalid message: ", type, payload)
+      }
+
+    })
   }
 }
 
@@ -76,20 +86,52 @@ function update() {
     }
 
     this.physics.world.wrap(this.ship, 5);
+
+    // emit player movement
+    var x = this.ship.x;
+    var y = this.ship.y;
+    var r = this.ship.rotation;
+    if (this.ship.oldPosition && (x !== this.ship.oldPosition.x || y !== this.ship.oldPosition.y || r !== this.ship.oldPosition.rotation)) {
+      this.send({
+        "Type": 'playerMovement',
+        "Payload": JSON.stringify({ ID: this.ship.id, X: this.ship.x, Y: this.ship.y, R: this.ship.rotation })
+      });
+    }
+
+    // save old position data
+    this.ship.oldPosition = {
+      x: this.ship.x,
+      y: this.ship.y,
+      rotation: this.ship.rotation
+    };
   }
 }
 
-function handleCursor() {
+function addPlayer(self, info) {
+  self.ship = createPlayer(self, info)
+
+  for (id in self.others) {
+    if (self.ship.id == id)
+    {
+      delete self.others[id]
+      return
+    }
+  }
 }
 
-function addShip(self, x, y) {
-  self.ship = self.physics.add.image(x, y, 'ship').setOrigin(0.5, 0.5).setDisplaySize(53, 40)
-  // if (playerInfo.team === 'blue') {
-  //   self.ship.setTint(0x0000ff)
-  // } else {
-  //   self.ship.setTint(0xff0000)
-  // }
-  self.ship.setDrag(100)
-  self.ship.setAngularDrag(100)
-  self.ship.setMaxVelocity(200)
+function addOtherPlayer(self, info) {
+  if (info['ID'] == self.ship.id)
+    return
+
+  self.others[info['ID']] = createPlayer(self, info)
+  console.log(self.others)
+}
+
+function createPlayer(self, info) {
+  player = self.physics.add.image(info['X'], info['Y'], 'ship').setOrigin(0.5, 0.5).setDisplaySize(53, 40)
+  player.id = info['ID']
+  player.setDrag(100)
+  player.setAngularDrag(100)
+  player.setMaxVelocity(200)
+  return player
 }

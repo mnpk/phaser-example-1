@@ -25,9 +25,18 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
+// Message ...
 type Message struct {
-	Type    string `json:"type"`
-	Payload string `json:"payload"`
+	Type    string
+	Payload string
+}
+
+// PlayerInfo ...
+type PlayerInfo struct {
+	ID int
+	X  float32
+	Y  float32
+	R  float32
 }
 
 // Client is a middleman between the websocket connection and the hub.
@@ -35,6 +44,34 @@ type Client struct {
 	hub  *Hub
 	conn *websocket.Conn
 	send chan []byte
+	id   int
+	info *PlayerInfo
+}
+
+func (c *Client) init() {
+	c.info = &PlayerInfo{
+		ID: c.id,
+		X:  300,
+		Y:  300,
+		R:  0,
+	}
+
+	p1, _ := json.Marshal(c.info)
+	c.response(&Message{
+		Type:    "newPlayer",
+		Payload: string(p1),
+	})
+
+	var list []PlayerInfo
+	for client := range c.hub.clients {
+		list = append(list, *client.info)
+	}
+	log.Println(list)
+	p2, _ := json.Marshal(list)
+	c.broadcast(&Message{
+		Type:    "allPlayers",
+		Payload: string(p2),
+	})
 }
 
 func (c *Client) readPump() {
@@ -43,6 +80,7 @@ func (c *Client) readPump() {
 		c.conn.Close()
 	}()
 
+	c.init()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
@@ -59,15 +97,37 @@ func (c *Client) readPump() {
 			}
 			break
 		}
-		// msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
-		log.Printf("ReadJSON: %v", msg)
-		b, err := json.Marshal(msg)
-		if err != nil {
-			log.Println(err)
-			break
-		}
 
-		c.hub.broadcast <- b
+		log.Printf("handleMessage from client %v: %v", c.id, msg)
+		c.handleMessage(&msg)
+	}
+}
+
+func (c *Client) response(msg *Message) {
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	c.send <- b
+}
+
+func (c *Client) broadcast(msg *Message) {
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	c.hub.broadcast <- b
+}
+
+func (c *Client) handleMessage(msg *Message) {
+	switch msg.Type {
+	case "playerMovement":
+		c.broadcast(msg)
+
+	default:
+		log.Println("invalid message type")
 	}
 }
 

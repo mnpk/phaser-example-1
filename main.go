@@ -5,6 +5,8 @@ import (
 	"net/http"
 )
 
+var index = 0
+
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -12,10 +14,12 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	index++
 	client := &Client{
 		hub:  hub,
 		conn: c,
 		send: make(chan []byte, 256),
+		id:   index,
 	}
 	client.hub.register <- client
 
