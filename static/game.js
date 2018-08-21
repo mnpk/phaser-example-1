@@ -68,7 +68,7 @@ function create() {
     }
   }
 
-  var socket = new WebSocket("ws://localhost:3000/ws")
+  var socket = new WebSocket("ws://" + location.host + "/ws")
 
   function send(msg) {
     socket.send(JSON.stringify(msg))
